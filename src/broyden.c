@@ -90,7 +90,7 @@ void eliminacaoGauss_Otim (long double *a, long double *b, long double *c, long 
         
         long double m1 = a[i] / b[i-1];
         b[i] -= m1 * c[i-1];
-        f[i] -= m1 * f[i-1];
+        f[i] -= m1 * (f[i-1]*-1);
         a[i] = 0.0;
 
         long double m2 = a[i+1] / b[i];
@@ -130,6 +130,17 @@ void eliminacaoGauss_Otim (long double *a, long double *b, long double *c, long 
         
         
     }
+    
+    //Resto
+    for (int i = limit; i < n; ++i) {
+        
+        long double m1 = a[i] / b[i-1];
+        b[i] -= m1 * c[i-1];
+        f[i] -= m1 * f[i-1];
+        a[i] = 0.0;
+    }
+
+
 
     // Proteção para o último elemento da diagonal antes da retro-substituição
     if (fabsl(b[n-1]) < 1e-12) {
@@ -243,7 +254,7 @@ void newton(long double **j, long double *f, long double *s, long double *x, lon
 	*tempoJ += timestamp() - tempo;
   }
 
-  free(menos_f);
+  
 }
 
 /* --------- norma euclidiana otimizado --------- */
@@ -269,14 +280,16 @@ long double norma_Otim(long double *v, int n) {
 
 
 //Método de Newton Otimizado
-void newton_Otim(long double *a, long double *b, long double *c,  long double *f, long double *s, long double *x, long double tol, int max_iter, int n, rtime_t *tempoJ_ot, rtime_t *tempo_resolucao_ot) {
+void newton_Otim(long double *a, long double *b, long double *c, 
+	long double *f, long double *s, long double *x, long double tol, 
+	int max_iter, int n, rtime_t *tempoJ_ot, rtime_t *tempo_resolucao_ot) {
   rtime_t tempo;
   
 
   
   LIKWID_MARKER_START("Monta_Jacobiana_Otim");
   tempo = timestamp();
-  montaJacobiana_Otim (x, a, b, c, n); // Alterado aqui
+  montaJacobiana_Otim (x, a, b, c, n); 
   *tempoJ_ot += timestamp() - tempo;
   LIKWID_MARKER_STOP("Monta_Jacobiana_Otim");
 
@@ -288,8 +301,8 @@ void newton_Otim(long double *a, long double *b, long double *c,  long double *f
 
     LIKWID_MARKER_START("Resolucao_SL_Otim");
     tempo = timestamp ();
-    eliminacaoGauss_Otim (a, b, c, s, menos_f, n); // Alterado aqui
-	*tempo_resolucao_ot += timestamp () - tempo;
+    eliminacaoGauss_Otim (a, b, c, s, f, n);
+    *tempo_resolucao_ot += timestamp () - tempo;
     LIKWID_MARKER_STOP("Resolucao_SL_Otim");
 
     for (int i = 0; i < n; i++) x[i] += s[i];
@@ -305,10 +318,9 @@ void newton_Otim(long double *a, long double *b, long double *c,  long double *f
     avaliaF_Otim (x, f, n);
 
     tempo = timestamp ();
-    LIKWID_MARKER_START("Monta_Jacobiana");
-    montaJacobiana_Otim (x, a, b, c, n); // Alterado aqui
-    LIKWID_MARKER_STOP("Monta_Jacobiana");
-	*tempoJ_ot += timestamp() - tempo;
+    LIKWID_MARKER_START("Monta_Jacobiana_Otim");
+    montaJacobiana_Otim (x, a, b, c, n); 
+    LIKWID_MARKER_STOP("Monta_Jacobiana_Otim");
+    *tempoJ_ot += timestamp() - tempo;
   }
-  free(menos_f);
 }
