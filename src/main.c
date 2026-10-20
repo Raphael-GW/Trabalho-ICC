@@ -57,7 +57,6 @@ int main() {
     
     // Roda Agora com as Otimizacoes
     rtime_t tempo_montaJ_ot = 0.0, tempo_resolucao_ot = 0.0;
-    for (int i = 0; i < n; i++) x[i] = x0;
     
     avaliaF_Otim (x, f, n); //monta o vetor F(X)
 
