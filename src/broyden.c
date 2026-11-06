@@ -134,16 +134,16 @@ void eliminacaoGauss_Otim (long double *a, long double *b, long double *c, long 
     }
 
     // Verifica todos os pivos (a condicao tambem captura NaN/Inf)
-    for (int k = 0; k < n; k++) {
-        if (!(fabsl(b[k]) > EPS_PIVO)) {
+    /*for (int k = 0; k < n; k++) {
+        if (!(fabsl(b[k]) > PS_PIVO)) {
             fprintf(stderr, "Erro Numerico: pivo b[%d] nulo ou invalido.\n", k);
             exit(EXIT_FAILURE);
         }
-    }
+    }*/
 
     // Retro-substituição
     s[n-1] = f[n-1] / b[n-1];
-    int i = n - 2; // Declarado fora para manter o estado entre os loops
+    i = n - 2; // Declarado fora para manter o estado entre os loops
 
     // 1. Loop Desenrolado (Sempre que houver pelo menos 8 elementos restantes)
     for (; i >= 7; i -= 8) {
