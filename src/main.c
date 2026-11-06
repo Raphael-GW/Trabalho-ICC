@@ -2,13 +2,23 @@
 #include <stdlib.h>
 #include <math.h>
 #include <likwid.h>
+#include <string.h>
 
 #include "broyden.h"
 #include "utils.h"
 
-int main() {
+int main(int argc, char* argv[]) {
     int n, max_iter; // define  o tamanho do sistema e o número máximo de iterações
     double x0, tol; // define o chute inicial e a tolerância para convergência
+
+		if (argc < 2) {
+			perror("Sem flag \n");
+			return 1 ;
+		}
+		if (strcmp(argv[1], "-o") != 0 && strcmp(argv[1], "-n") != 0) {
+			perror("Flag errada \n");
+			return 1 ;
+		}
 
     printf ("Digite a dimensao do sistema (N): ");
     scanf ("%d", &n);
@@ -32,54 +42,58 @@ int main() {
     
     
     //Jacobiana otimizada
-    //long double *a =  malloc(n * sizeof(long double)); // subdiagonal
-    //long double *b =  malloc(n * sizeof(long double)); // diagonal principal
-    //long double *c =  malloc(n * sizeof(long double)); // superdiagonal
+    long double *a =  malloc(n * sizeof(long double)); // subdiagonal
+    long double *b =  malloc(n * sizeof(long double)); // diagonal principal
+    long double *c =  malloc(n * sizeof(long double)); // superdiagonal
     
 
     /* chute inicial para todos */
-    for (int i = 0; i < n; i++) x[i] = x0;
-    
-    LIKWID_MARKER_INIT; // Inicializa o sistema de marcação do LIKWID
+		for (int i = 0; i < n; i++) x[i] = x0;
+		
+		LIKWID_MARKER_INIT; // Inicializa o sistema de marcação do LIKWID
 
-    
-    avaliaF(x, f, n); //monta o vetor F(X)
+		if ( strcmp(argv[1], "-n") == 0) {
+			
+			avaliaF(x, f, n); //monta o vetor F(X)
 
-    rtime_t tempo_montaJ = 0.0, tempo_resolucao = 0.0;
+			rtime_t tempo_montaJ = 0.0, tempo_resolucao = 0.0;
 
-    LIKWID_MARKER_START("Newton");
-    rtime_t tempo_newton = timestamp();
-    newton(j, f, s, x, tol, max_iter, n, &tempo_montaJ, &tempo_resolucao);
-    tempo_newton = timestamp() - tempo_newton;
-    LIKWID_MARKER_STOP("Newton");
+			LIKWID_MARKER_START("Newton");
+			rtime_t tempo_newton = timestamp();
+			newton(j, f, s, x, tol, max_iter, n, &tempo_montaJ, &tempo_resolucao);
+			tempo_newton = timestamp() - tempo_newton;
+			LIKWID_MARKER_STOP("Newton");
     
+			printf ("##########\n");
+			printf ("# Tempo Total: %f\n", tempo_newton);
+			printf ("# Tempo Jacobiana: %f\n", tempo_montaJ);
+			printf ("# Tempo SL: %f\n", tempo_resolucao);
+			printf ("##########\n");
+		
+		}
+			printf ("##########\n");
+    
+		if ( strcmp(argv[1], "-o") == 0) {
 
-    /*
-    // Roda Agora com as Otimizacoes
-    rtime_t tempo_montaJ_ot = 0.0, tempo_resolucao_ot = 0.0;
-    
-    avaliaF_Otim (x, f, n); //monta o vetor F(X)
+			// Roda Agora com as Otimizacoes
+			rtime_t tempo_montaJ_ot = 0.0, tempo_resolucao_ot = 0.0;
+			
+			avaliaF_Otim (x, f, n); //monta o vetor F(X)
 
-    LIKWID_MARKER_START("Newton_Otim");
-    rtime_t tempo_newton_ot = timestamp();
-    newton_Otim (a, b, c, f, s, x, tol, max_iter, n, &tempo_montaJ_ot, &tempo_resolucao_ot);
-    tempo_newton_ot = timestamp() - tempo_newton_ot;
-    LIKWID_MARKER_STOP("Newton_Otim");
-    */
-    
-    printf ("##########\n");
-    printf ("# Tempo Total: %f\n", tempo_newton);
-    printf ("# Tempo Jacobiana: %f\n", tempo_montaJ);
-    printf ("# Tempo SL: %f\n", tempo_resolucao);
-    printf ("##########\n");
-  
-    /*  
-    printf ("##########\n");
-    printf ("# Tempo Otimizado Total: %f\n", tempo_newton_ot);
-    printf ("# Tempo Otimizado Jacobiana: %f\n", tempo_montaJ_ot);
-    printf ("# Tempo Otimizado SL: %f\n", tempo_resolucao_ot);
-    printf ("##########\n");
-    */
+			LIKWID_MARKER_START("Newton_Otim");
+			rtime_t tempo_newton_ot = timestamp();
+			newton_Otim (a, b, c, f, s, x, tol, max_iter, n, &tempo_montaJ_ot, &tempo_resolucao_ot);
+			tempo_newton_ot = timestamp() - tempo_newton_ot;
+			LIKWID_MARKER_STOP("Newton_Otim");
+
+
+			printf ("##########\n");
+			printf ("# Tempo Otimizado Total: %f\n", tempo_newton_ot);
+			printf ("# Tempo Otimizado Jacobiana: %f\n", tempo_montaJ_ot);
+			printf ("# Tempo Otimizado SL: %f\n", tempo_resolucao_ot);
+			printf ("##########\n");
+			
+		}
 
     free(x); 
     free(f); 
@@ -91,9 +105,9 @@ int main() {
     free(j);
     
 
-    //free(a);
-    //free(b);
-    //free(c);
+    free(a);
+    free(b);
+    free(c);
     
     LIKWID_MARKER_CLOSE; // Finaliza o sistema de marcação do LIKWID
     return 0;

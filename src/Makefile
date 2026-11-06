@@ -35,3 +35,7 @@ valgrind: $(nomePrograma)
 
 clean:
 	rm -f *.o *.gch $(nomePrograma)
+
+purge:
+	rm -f *.o *.gch $(nomePrograma)
+	rm saida_*
