@@ -56,10 +56,18 @@ void inicializaJacobiana_Otim(long double *a, long double *c, int n) {
 */
 void montaJacobiana_Otim(long double *x, long double *a,  long double *b, long double *c, int n) {
 // Reconstrói a diagonal principal baseada no x atualizado
-    for (int i = 0; i < n; i++) {
+    int limit = 1 + (n - 2) / 8 * 8;
+    int i;
+    for (i = 0; i < n; i += 8) {
         b[i] = -4.0L * x[i] + 3.0L;
+ 	b[i+1] = -4.0L * x[i+1] + 3.0L;
+	b[i+2] = -4.0L * x[i+2] + 3.0L;
+ 	b[i+3] = -4.0L * x[i+3] + 3.0L;
+ 	b[i+4] = -4.0L * x[i+4] + 3.0L;
+ 	b[i+5] = -4.0L * x[i+5] + 3.0L;
+ 	b[i+6] = -4.0L * x[i+6] + 3.0L;
+ 	b[i+7] = -4.0L * x[i+7] + 3.0L;
     }
-    
 }
 
 void montaJacobiana(long double *x, long double **j, int n){
@@ -84,7 +92,7 @@ void montaJacobiana(long double *x, long double **j, int n){
 // Eliminação de Gauss otimizada
 void eliminacaoGauss_Otim (long double *a, long double *b, long double *c, long double *s, long double *f, int n){
     // Triangularização (Algoritmo de Thomas)
-    f[0] = -f[0];
+    for (int i = 0; i < n; ++i) f[i] = -f[i];
     
     int limit = 1 + ((n - 1) / 8) * 8; // Limite para o loop unroll, garantindo que não ultrapasse n-1
     int i;
