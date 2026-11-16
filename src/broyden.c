@@ -49,24 +49,26 @@ void inicializaJacobiana_Otim(long double *a, long double *c, int n) {
     c[n-1] = 0.0L;
 }
 
-/* --------- Monta as 3 diagonais da Jacobiana J(x) ---------
-  a: subdiagonal  (indices 1..n-1 usados; a[0] ignorado)
+/* --------- Monta somente a diagonal principal da Jacobiana J(x) ---------
   b: diagonal     (indices 0..n-1)
-  c: superdiag.   (indices 0..n-2 usados; c[n-1] ignorado)
 */
 void montaJacobiana_Otim(long double *x, long double *a,  long double *b, long double *c, int n) {
 // Reconstrói a diagonal principal baseada no x atualizado
-    int limit = 1 + (n - 2) / 8 * 8;
+    int limit = n - n % 8;
     int i;
-    for (i = 0; i < n; i += 8) {
+    for (i = 0; i < limit; i += 8) {
         b[i] = -4.0L * x[i] + 3.0L;
- 	b[i+1] = -4.0L * x[i+1] + 3.0L;
-	b[i+2] = -4.0L * x[i+2] + 3.0L;
- 	b[i+3] = -4.0L * x[i+3] + 3.0L;
- 	b[i+4] = -4.0L * x[i+4] + 3.0L;
- 	b[i+5] = -4.0L * x[i+5] + 3.0L;
- 	b[i+6] = -4.0L * x[i+6] + 3.0L;
- 	b[i+7] = -4.0L * x[i+7] + 3.0L;
+        b[i+1] = -4.0L * x[i+1] + 3.0L;
+        b[i+2] = -4.0L * x[i+2] + 3.0L;
+        b[i+3] = -4.0L * x[i+3] + 3.0L;
+        b[i+4] = -4.0L * x[i+4] + 3.0L;
+        b[i+5] = -4.0L * x[i+5] + 3.0L;
+        b[i+6] = -4.0L * x[i+6] + 3.0L;
+        b[i+7] = -4.0L * x[i+7] + 3.0L;
+    }
+
+    for (; i < n; ++i){
+        b[i] = -4.0L * x[i] + 3.0L;
     }
 }
 
@@ -140,14 +142,6 @@ void eliminacaoGauss_Otim (long double *a, long double *b, long double *c, long 
         b[i] -= m1 * c[i-1];
         f[i] -= m1 * f[i-1];
     }
-
-    // Verifica todos os pivos (a condicao tambem captura NaN/Inf)
-    /*for (int k = 0; k < n; k++) {
-        if (!(fabsl(b[k]) > PS_PIVO)) {
-            fprintf(stderr, "Erro Numerico: pivo b[%d] nulo ou invalido.\n", k);
-            exit(EXIT_FAILURE);
-        }
-    }*/
 
     // Retro-substituição
     s[n-1] = f[n-1] / b[n-1];
@@ -241,7 +235,7 @@ void newton(long double **j, long double *f, long double *s, long double *x, lon
     nF = norma(s, n);
 
     if (nF < tol) {
-      printf("%2d | %.6e |  (convergiu)\n", k, nF);
+      printf("%2d | %.6Le |  (convergiu)\n", k, nF);
       printf("\nConvergencia em %d iteracoes.\n", k);
       break;
     }
@@ -321,7 +315,7 @@ void newton_Otim(long double *a, long double *b, long double *c,
 
         nF = norma_Otim (s, n);
         if (nF < tol) { 
-            printf("%2d | %.6e |  (convergiu)\n", k, nF);
+            printf("%2d | %.6Le |  (convergiu)\n", k, nF);
             printf("\nConvergencia em %d iteracoes.\n", k);
             break; 
         }

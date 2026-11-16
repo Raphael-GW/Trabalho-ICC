@@ -12,7 +12,7 @@ int main(int argc, char* argv[]) {
     double x0, tol; // define o chute inicial e a tolerância para convergência
 
 	if (argc > 1 && strcmp(argv[1], "-o") != 0 && strcmp(argv[1], "-n") != 0) {
-		perror("Flag errada \n");
+		fprintf(stderr, "Flag errada \n");
 		return 1 ;
 	}
 
@@ -29,19 +29,6 @@ int main(int argc, char* argv[]) {
     long double *f =  malloc(n * sizeof(long double)); // vetor com cada resultado de f(x)
     long double *s =  malloc(n * sizeof(long double)); // delta usado para atualizar x (i+1)
     
-    
-    long double **j =  malloc(n * sizeof(long double*)); // matriz jacobiana
-
-    for (int i = 0; i < n; i++){
-        j[i] = malloc(n * sizeof(long double));
-    }
-    
-    
-    //Jacobiana otimizada
-    long double *a =  malloc(n * sizeof(long double)); // subdiagonal
-    long double *b =  malloc(n * sizeof(long double)); // diagonal principal
-    long double *c =  malloc(n * sizeof(long double)); // superdiagonal
-    
 
     /* chute inicial para todos */
 	for (int i = 0; i < n; i++) x[i] = x0;
@@ -49,6 +36,12 @@ int main(int argc, char* argv[]) {
 	LIKWID_MARKER_INIT; // Inicializa o sistema de marcação do LIKWID
 	if (argc > 1){
 		if ( strcmp(argv[1], "-n") == 0) {
+
+			long double **j =  malloc(n * sizeof(long double*)); // matriz jacobiana
+
+			for (int i = 0; i < n; i++){
+				j[i] = malloc(n * sizeof(long double));
+			}
 			
 			avaliaF(x, f, n); //monta o vetor F(X)
 
@@ -65,11 +58,21 @@ int main(int argc, char* argv[]) {
 			printf ("# Tempo Jacobiana: %f\n", tempo_montaJ);
 			printf ("# Tempo SL: %f\n", tempo_resolucao);
 			printf ("##########\n");
+
+			for (int i = 0; i < n; ++i){
+        		free(j[i]);
+    		}
+    		free(j);
 		
 		}
 		printf ("##########\n");
 
 		if (strcmp(argv[1], "-o") == 0) {
+
+			//Jacobiana otimizada
+			long double *a =  malloc(n * sizeof(long double)); // subdiagonal
+			long double *b =  malloc(n * sizeof(long double)); // diagonal principal
+			long double *c =  malloc(n * sizeof(long double)); // superdiagonal
 
 			// Roda Agora com as Otimizacoes
 			rtime_t tempo_montaJ_ot = 0.0, tempo_resolucao_ot = 0.0;
@@ -88,6 +91,10 @@ int main(int argc, char* argv[]) {
 			printf ("# Tempo Otimizado Jacobiana: %f\n", tempo_montaJ_ot);
 			printf ("# Tempo Otimizado SL: %f\n", tempo_resolucao_ot);
 			printf ("##########\n");
+
+			    free(a);
+				free(b);
+				free(c);
 			
 		}
 	}
@@ -110,21 +117,15 @@ int main(int argc, char* argv[]) {
 			printf ("# Tempo Otimizado Jacobiana: %f\n", tempo_montaJ_ot);
 			printf ("# Tempo Otimizado SL: %f\n", tempo_resolucao_ot);
 			printf ("##########\n");
+
+			free(a);
+			free(b);
+			free(c);
 	}
 
     free(x); 
     free(f); 
     free(s);
-    
-    for (int i = 0; i < n; ++i){
-        free(j[i]);
-    }
-    free(j);
-    
-
-    free(a);
-    free(b);
-    free(c);
     
     LIKWID_MARKER_CLOSE; // Finaliza o sistema de marcação do LIKWID
     return 0;
