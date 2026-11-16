@@ -1,16 +1,21 @@
 #!/bin/bash
-
-CMD_DIR=`dirname $0`
-
 # ---------------------------------------------------------------------------
-# lê o 'broyden':
-#   - recebe uma FLAG (-n ou -o) como argumento de linha de comando;
-#   - lê, via stdin (scanf), nesta ordem: N, x0, tol, max_iter;
-#   - usa marcadores LIKWID FIXOS ("Newton" e "Newton_Otim"), sem o N embutido.
-# Por isso X0, TOL e MAX_ITER viraram parâmetros do script, e precisamos
-# gravar o N no log manualmente (ver "===> N: ... <==" abaixo), já que o
-# genplot.py não consegue mais extrair o N do nome do marcador.
+# Coleta os dados de desempenho do 'broyden' e gera CSVs e graficos.
+#
+# Uso: ./gendata.sh [PROG] [CPU] [X0] [TOL] [MAXIT]
+#
+# O broyden recebe a FLAG (-n = Newton normal, -o = Newton otimizado) na linha
+# de comando e le via stdin, nesta ordem: N, x0, tol, max_iter.
+#
+# Parametros fixados pelo enunciado: TOL=0 e MAXIT=25 para todos os testes.
+#
+# Saidas (em resultados/<PROG>/):
+#   Tempos.csv         tempos em ms medidos com timestamp() (execucao SEM likwid)
+#   <GRUPO>.log        saida do likwid-perfctr de todos os N (um bloco por N)
+#   *.csv / *.png      gerados pelo genplot.py (12 graficos)
 # ---------------------------------------------------------------------------
+
+CMD_DIR=$(dirname "$0")
 
 PROG=${1:-broyden}
 CPU=${2:-3}
@@ -21,77 +26,84 @@ MAXIT=${5:-25}
 DATA_DIR="resultados/${PROG}"
 TEMPOS="${DATA_DIR}/Tempos.csv"
 
-METRICA="L3 FLOPS_DP L2CACHE"
+# Grupos do LIKWID (se o grupo MEM existir na maquina, troque L3 por MEM)
+METRICAS="L3 FLOPS_DP FLOPS_AVX L2CACHE"
 
-TAMANHOS_NOTIM="32 64 128 256 512 1000 2000 4000"
-TAMANHOS_OTIM="8000 9000 10000 20000"
-# Modos de execução do programa: Newton "puro" (-n) e Newton Otimizado (-o).
-# Cada um ativa um marcador diferente dentro do main.c.
-MODOS="-n -o"
+# Ate 2000 roda -n e -o. A partir de 4000 so a versao otimizada (-o) e executada.
+TAMANHOS_AMBOS="32 64 128 256 512 1000 2000"
+TAMANHOS_OTIM="4000 8000 9000 10000 20000"
 
-mkdir -p ${DATA_DIR}
+mkdir -p "${DATA_DIR}"
 
-likwid-setFrequencies -g performance -c ${CPU}
+likwid-setFrequencies -g performance -c "${CPU}"
 
-# O Makefile_1 só tem o target 'all' (compila $(nomePrograma)); não existem
-# mais os targets 'avx'/'debug' do matmult.
+# Executa o programa com a entrada padrao do enunciado: N, x0, tol, max_iter
+entrada() {
+    printf '%d\n%s\n%s\n%d\n' "$1" "${X0}" "${TOL}" "${MAXIT}"
+}
 
+# ---------------------------------------------------------------------------
+# 1) Tempos (sem likwid, para nao medir a sobrecarga da instrumentacao).
+#    Formato: N,versao,total_ms,jacobiana_ms,sl_ms
+# ---------------------------------------------------------------------------
+echo "N,versao,total_ms,jacobiana_ms,sl_ms" > "${TEMPOS}"
 
-for m in ${METRICA}
-do
+roda_tempo() {   # $1 = N, $2 = flag (-n|-o)
+    local n=$1 modo=$2 versao saida
+    [ "${modo}" = "-n" ] && versao="Normal" || versao="Otimizado"
+    echo "--->>  TEMPO: ./${PROG} ${modo}  N=${n}" >&2
+
+    saida=$(entrada "${n}" | ./${PROG} ${modo})
+    # linhas: "# Tempo [Otimizado] Total|Jacobiana|SL: <valor>"
+    local t_total t_jac t_sl
+    t_total=$(echo "${saida}" | grep -E "^# Tempo.* Total:"     | awk '{print $NF}')
+    t_jac=$(  echo "${saida}" | grep -E "^# Tempo.* Jacobiana:" | awk '{print $NF}')
+    t_sl=$(   echo "${saida}" | grep -E "^# Tempo.* SL:"        | awk '{print $NF}')
+    echo "${n},${versao},${t_total},${t_jac},${t_sl}" >> "${TEMPOS}"
+}
+
+for n in ${TAMANHOS_AMBOS}; do
+    for modo in -n -o; do roda_tempo "${n}" "${modo}"; done
+done
+for n in ${TAMANHOS_OTIM}; do roda_tempo "${n}" -o; done
+
+# ---------------------------------------------------------------------------
+# 2) Contadores LIKWID. Os marcadores do broyden nao carregam o N no nome, por
+#    isso gravamos "===> N: <n> <==" no log antes de cada bloco de dados.
+# ---------------------------------------------------------------------------
+roda_likwid() {  # $1 = grupo, $2 = N, $3 = flag, $4 = arquivo de log
+    local m=$1 n=$2 modo=$3 log=$4
+    local out="${DATA_DIR}/${m}_${n}_${modo#-}.txt"
+    echo "--->>  ${m}: ./${PROG} ${modo}  N=${n}" >&2
+
+    entrada "${n}" | \
+        likwid-perfctr -O -C "${CPU}" -g "${m}" -o "${out}" -m ./${PROG} ${modo} > /dev/null
+
+    cat "${out}" >> "${log}"
+    rm -f "${out}"
+}
+
+for m in ${METRICAS}; do
     LIKWID_LOG="${DATA_DIR}/${m}.log"
-    rm -f ${TEMPOS}
-    rm -f ${LIKWID_LOG}
+    rm -f "${LIKWID_LOG}"
 
-    for n in $TAMANHOS_NOTIM
-    do
-	# Grava no log qual N corresponde aos blocos de dados que virão a
-	# seguir. O genplot.py usa essa linha para saber o eixo X, já que
-	# o broyden não embute o N no nome do marcador.
-	echo "===> N: ${n} <==" >> ${LIKWID_LOG}
-
-	for modo in ${MODOS}
-	do
-	    LIKWID_OUT="${DATA_DIR}/${m}_${n}_${modo#-}.txt"
-
-	    echo "--->>  $m: ./${PROG} ${modo}  N=${n}" >/dev/tty
-
-	    # O broyden lê, via stdin (scanf), nesta ordem: N, x0, tol, max_iter
-	    printf '%d\n%s\n%s\n%d\n' "${n}" "${X0}" "${TOL}" "${MAXIT}" | \
-		likwid-perfctr -O -C ${CPU} -g ${m} -o ${LIKWID_OUT} -m ./${PROG} ${modo} >>${TEMPOS}
-
-	    cat ${LIKWID_OUT} >> ${LIKWID_LOG}
-	    rm -f ${LIKWID_OUT}
-	done
-    done
-    for n in $TAMANHOS_OTIM
-    do
-	# Grava no log qual N corresponde aos blocos de dados que virão a
-	# seguir. O genplot.py usa essa linha para saber o eixo X, já que
-	# o broyden não embute o N no nome do marcador.
-	echo "===> N: ${n} <==" >> ${LIKWID_LOG}
-
-	modo="-n"
-	
-	LIKWID_OUT="${DATA_DIR}/${m}_${n}_${modo#-}.txt"
-
-	echo "--->>  $m: ./${PROG} ${modo}  N=${n}" >/dev/tty
-
-	# O broyden lê, via stdin (scanf), nesta ordem: N, x0, tol, max_iter
-	printf '%d\n%s\n%s\n%d\n' "${n}" "${X0}" "${TOL}" "${MAXIT}" | \
-	likwid-perfctr -O -C ${CPU} -g ${m} -o ${LIKWID_OUT} -m ./${PROG} ${modo} >>${TEMPOS}
-
-	cat ${LIKWID_OUT} >> ${LIKWID_LOG}
-	rm -f ${LIKWID_OUT}
-	
+    for n in ${TAMANHOS_AMBOS}; do
+        echo "===> N: ${n} <==" >> "${LIKWID_LOG}"
+        for modo in -n -o; do roda_likwid "${m}" "${n}" "${modo}" "${LIKWID_LOG}"; done
     done
 
-    # A partir dos logs, gera (para cada métrica) um CSV com uma coluna
-    # por marcador (Newton, Newton_Otim), indexado por N.
-    ${CMD_DIR}/genplot.py < ${LIKWID_LOG} > ${LIKWID_LOG%%.log}.csv
+    for n in ${TAMANHOS_OTIM}; do
+        echo "===> N: ${n} <==" >> "${LIKWID_LOG}"
+        roda_likwid "${m}" "${n}" -o "${LIKWID_LOG}"
+    done
 done
 
-likwid-setFrequencies -g powersave -c ${CPU}
+likwid-setFrequencies -g powersave -c "${CPU}"
+
+# ---------------------------------------------------------------------------
+# 3) CSVs e graficos
+# ---------------------------------------------------------------------------
+python3 "${CMD_DIR}/genplot.py" "${DATA_DIR}"
 
 echo ""
-echo ""
+echo "Concluido. Graficos em ${DATA_DIR}/"

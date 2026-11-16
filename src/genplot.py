@@ -1,152 +1,177 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 # coding=utf8
+"""
+Le os logs do likwid-perfctr (-O, CSV) e o Tempos.csv gerados pelo gendata.sh
+e produz, em <dir>:
+  - um CSV por teste (tempo, banda, l2cache, flops), com cabecalho;
+  - 12 graficos de linhas PNG: 4 testes x 3 trechos (total, jacobiana, SL).
 
-# Descomente as 2 linhas abaixo se quiser que Python procure por modulos
-# em outros diretórios que não os do sistema e o diretório corrente.
-## import sys, os
-## sys.path.extend([ '~/lib/python', '.', '..' ])
-# Ou em seu ambiente shell, crie e exporte a variavel de ambiente PYTHONPATH.
-# Coloque a linha abaixo em seu arquivo '~/.bashrc' ou '~/.profile:
-## export PYTHONPATH="${HOME}/lib/python:.:.."
-#
+Uso: python3 genplot.py [diretorio]      (padrao: resultados/broyden)
+"""
+import csv
+import os
+import re
+import sys
 
-import re, sys
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
-#  "CACHE"    : "data cache misses",
-#  "CACHE"    : "data cache miss ratio",
-#  "CACHE"    : "data cache miss rate",
-#  "L2CACHE"  : "L2 miss ratio",
-#  "L2CACHE"  : "L2 miss rate",
-#  "L3"       : "L3 bandwidth \[*MBytes/s\]*",
-#  "MEM"      : "Memory bandwidth \[*MBytes/s\]*",
-#  "MEM"      : "Memory read bandwidth",
-#  "MEM"      : "Memory write bandwidth",
-#  "ENERGY"   : "Power \[*W\]*",
-#  "TIME"     : "Runtime \(RDTSC\) \[*s\]*",
-#  "FLOPS_AVX": "AVX DP \[*MFLOP/s\]*",
+DIR = sys.argv[1] if len(sys.argv) > 1 else "resultados/broyden"
 
-campos = { "L2CACHE"  : "L2 miss ratio",
-           "FLOPS_DP" : "DP .*MFLOP/s.*",
-           "FLOPS_AVX": "Packed DP .*MFLOP/s.*",
-           "L3"       : r"L3 bandwidth \[*MBytes/s]*"
-         }
+# regiao LIKWID -> (trecho, versao)
+REGIOES = {
+    "Newton":               ("total", "Normal"),
+    "Newton_Otim":          ("total", "Otimizado"),
+    "Monta_Jacobiana":      ("jac",   "Normal"),
+    "Monta_Jacobiana_Otim": ("jac",   "Otimizado"),
+    "Resolucao_SL":         ("sl",    "Normal"),
+    "Resolucao_SL_Otim":    ("sl",    "Otimizado"),
+}
+TRECHOS = [("total", "Metodo de Newton (total)"),
+           ("jac",   "Calculo das Jacobianas"),
+           ("sl",    "Resolucao dos sistemas lineares")]
+VERSOES = ["Normal", "Otimizado"]
+COR = {"Normal": "tab:red", "Otimizado": "tab:blue"}
 
-# 'STRUCT,Info' inicia Região
-# 'TABLE,Region.*Metric,<metrica>' inicia metrica
-# '<string>' inicia linha '<string>.*,<valor>,.*', onde
-# <string> é obtido a partir de 'campos[]', tendo <metrica> como chave
-
-# Linha gravada pelo gendata.sh ANTES de cada bloco de medidas, indicando
-# o tamanho (N) do problema que está sendo medido a seguir. É necessária
-# porque, diferente do matmult (onde o N vinha embutido no próprio nome
-# do marcador, ex. "MatVet_64"), o broyden usa marcadores fixos
-# ("Newton", "Newton_Otim") que não carregam o N.
-RE_TAMANHO = re.compile(r'===>\s*N:\s*(\d+)\s*<==')
-
-# Tamanho (N) "corrente": atualizado sempre que uma linha "===> N: ... <=="
-# é encontrada no fluxo de entrada; usado como 'ordem' quando o nome do
-# marcador não traz o N embutido.
-n_atual = None
+RE_N = re.compile(r"===>\s*N:\s*(\d+)\s*<==")
+RE_REGIAO = re.compile(r"TABLE,Region (\S+),Group \d+ Metric,")
 
 
-def lerDados():
-    global n_atual
-
-    linha = sys.stdin.readline()
-    while linha and (re.match("STRUCT,Info", linha) is None):
-        m = RE_TAMANHO.search(linha)
-        if m:
-            n_atual = int(m.group(1))
-        linha = sys.stdin.readline()
-
-    for linha in sys.stdin:
-        m = RE_TAMANHO.search(linha)
-        if m:
-            n_atual = int(m.group(1))
-        if re.match("TABLE,Region.*Metric,", linha) is not None:
-            break
-
-    if linha:
-        linha = linha.split(',')
-        metrica = linha[3]
-        regiao = linha[1].split('_')
-
-        # Se o último pedaço do nome do marcador for numérico, o N está
-        # embutido nele (comportamento original, usado pelo matmult:
-        # ex. "MatVet_64", "MatMat_Otim_128").
-        if regiao[-1].isnumeric():
-            ordem = int(regiao[-1])
-            marker = re.sub("Region ", "", '_'.join(regiao[:-1]))
-        else:
-            # Caso contrário (ex. "Newton", "Newton_Otim", no broyden),
-            # usa o N informado externamente pela linha "===> N: ... <=="
-            if n_atual is None:
-                sys.stderr.write(
-                    "AVISO: tamanho (N) desconhecido para o marcador "
-                    "'{0}' (nenhuma linha '===> N: ... <==' encontrada "
-                    "antes dele)\n".format(linha[1]))
-            ordem = n_atual
-            marker = re.sub("Region ", "", '_'.join(regiao))
-
-        for linha in sys.stdin:
-            if re.match(campos[metrica], linha) is not None:
-                break
-
-        if linha:
-            linha = linha.split(',')
-            valor = float(linha[1])
-
-            return [metrica, ordem, marker, valor]
-
-    return ''
-
-# fim lerDados()
+def le_log(arquivo, padroes):
+    """Retorna {(trecho, versao): {N: valor}} para a metrica `padroes` (regex
+    aplicadas no inicio da linha; a 1a que casar dentro da regiao e usada)."""
+    dados = {}
+    n = None
+    regiao = None
+    achou = False
+    with open(arquivo) as f:
+        for linha in f:
+            m = RE_N.search(linha)
+            if m:
+                n, regiao = int(m.group(1)), None
+                continue
+            m = RE_REGIAO.match(linha)
+            if m:
+                regiao, achou = m.group(1), False
+                continue
+            if linha.startswith(("STRUCT", "TABLE")):
+                regiao = None
+                continue
+            if regiao in REGIOES and not achou and n is not None:
+                if any(re.match(p, linha) for p in padroes):
+                    achou = True
+                    try:
+                        valor = float(linha.split(",")[1])
+                    except (IndexError, ValueError):
+                        continue
+                    dados.setdefault(REGIOES[regiao], {})[n] = valor
+    return dados
 
 
-# =====================================================
-# Início Programa principal
-# =====================================================
-#
-# Lê saída de likwid-perfctr -O e gera saída para gnuplot/matplotlib:
-# um "gráfico" (tabela) para cada métrica, contendo os dados de todos
-# os markers, indexados por N.
-#
+def le_tempos(arquivo):
+    """Retorna {(trecho, versao): {N: ms}} a partir do Tempos.csv."""
+    dados = {}
+    colunas = {"total": "total_ms", "jac": "jacobiana_ms", "sl": "sl_ms"}
+    with open(arquivo) as f:
+        for r in csv.DictReader(f):
+            for trecho, col in colunas.items():
+                try:
+                    dados.setdefault((trecho, r["versao"]), {})[int(r["N"])] = float(r[col])
+                except (ValueError, TypeError):
+                    pass
+    return dados
 
-# saida = {<metrica> : {<ordem> : [ [<marker>, <valor>] ]} }
-saida = {}
 
-# item possui campos: metrica, ordem(N), marker, valor.
-# 'ordem' é inteiro, 'valor' é double. 'marker' e 'metrica' são strings
+def primeiro_existente(*nomes):
+    for nome in nomes:
+        caminho = os.path.join(DIR, nome)
+        if os.path.exists(caminho):
+            return caminho
+    return None
 
-item = lerDados()
-while item:
-    if item[0] in saida:
-        if item[1] in saida[item[0]]:
-            saida[item[0]][item[1]].append(item[2:])
-        else:
-            saida[item[0]][item[1]] = [item[2:]]
-    else:
-        saida[item[0]] = {item[1]: [item[2:]]}
 
-    item = lerDados()
+def grava_csv(nome, series):
+    """series: {rotulo: {N: valor}} -> CSV com cabecalho 'N,<rotulos>'."""
+    ns = sorted({n for s in series.values() for n in s})
+    rotulos = sorted(series)
+    with open(os.path.join(DIR, nome), "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["N"] + rotulos)
+        for n in ns:
+            w.writerow([n] + [series[r].get(n, "") for r in rotulos])
 
-# gera tabela para uso em gnuplot ou pyplot/matplotlib
-gnuplot = ''
 
-for i in saida:
-    ordens = []
-    for j in saida[i]:
-        ordens.append(j)
-    ordens.sort()
+def grafico(nome, titulo, ylabel, series, logy=False):
+    """series: {(versao, rotulo_extra, estilo): {N: valor}}"""
+    fig, ax = plt.subplots(figsize=(6.5, 4.2))
+    for (versao, extra, estilo), pontos in series.items():
+        if not pontos:
+            continue
+        ns = sorted(pontos)
+        ax.plot(ns, [pontos[n] for n in ns], estilo, color=COR[versao],
+                marker="o", markersize=4,
+                label=versao + (" - " + extra if extra else ""))
+    ax.set_xscale("log")
+    if logy:
+        ax.set_yscale("log")
+    ax.set_xlabel("N (tamanho do SNLB)")
+    ax.set_ylabel(ylabel)
+    ax.set_title(titulo)
+    ax.grid(True, which="both", alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(os.path.join(DIR, nome), dpi=150)
+    plt.close(fig)
 
-    for j in ordens:
-        gnuplot += '{0}'.format(j)
-        for k in saida[i][j]:
-            gnuplot += ',{0}'.format(k[1])
 
-        gnuplot += '\n'
-    # FIM for j in ordens
+def main():
+    # cada teste: (id, titulo, ylabel, logy, [(arquivo(s), padroes, estilo, rotulo_extra)])
+    banda_log = primeiro_existente("MEM.log", "L3.log")
+    banda_pad = [r"Memory bandwidth \[MBytes/s\]"] if banda_log and banda_log.endswith("MEM.log") \
+        else [r"L3 bandwidth \[MBytes/s\]"]
+    banda_nome = "Banda de memoria (MEM)" if banda_log and banda_log.endswith("MEM.log") \
+        else "Banda de memoria (L3)"
 
-    # grava tabela de pontos
-    print(gnuplot, end='')
-# FIM for i in saida
+    testes = [
+        ("tempo", "Tempo de execucao", "Tempo (ms)", True,
+         [(os.path.join(DIR, "Tempos.csv"), None, "-", "")]),
+        ("banda", banda_nome, "Banda [MBytes/s]", False,
+         [(banda_log, banda_pad, "-", "")]),
+        ("l2cache", "Cache miss ratio L2", "L2 miss ratio", False,
+         [(primeiro_existente("L2CACHE.log"),
+           [r"L2 miss ratio", r"data cache miss ratio"], "-", "")]),
+        ("flops", "Operacoes aritmeticas", "MFLOP/s", False,
+         [(primeiro_existente("FLOPS_DP.log"), [r"DP \[MFLOP/s\]"], "-", "DP"),
+          (primeiro_existente("FLOPS_AVX.log"),
+           [r"Packed DP .*MFLOP/s", r"AVX DP .*MFLOP/s"], "--", "AVX")]),
+    ]
+
+    for tid, titulo, ylabel, logy, fontes in testes:
+        csv_series = {}
+        lidas = []
+        for arquivo, padroes, estilo, extra in fontes:
+            if not arquivo or not os.path.exists(arquivo):
+                sys.stderr.write("AVISO: arquivo ausente para '%s' (%s)\n" % (tid, extra or arquivo))
+                continue
+            dados = le_tempos(arquivo) if padroes is None else le_log(arquivo, padroes)
+            lidas.append((extra, estilo, dados))
+            for (trecho, versao), pontos in dados.items():
+                rot = "%s_%s%s" % (trecho, versao, "_" + extra if extra else "")
+                csv_series[rot] = pontos
+        if not csv_series:
+            continue
+        grava_csv(tid + ".csv", csv_series)
+
+        for trecho, nome_trecho in TRECHOS:
+            series = {}
+            for extra, estilo, dados in lidas:
+                for versao in VERSOES:
+                    series[(versao, extra, estilo)] = dados.get((trecho, versao), {})
+            grafico("%s_%s.png" % (tid, trecho), "%s - %s" % (titulo, nome_trecho),
+                    ylabel, series, logy)
+            print("gerado %s_%s.png" % (tid, trecho))
+
+
+if __name__ == "__main__":
+    main()

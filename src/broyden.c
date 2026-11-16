@@ -313,7 +313,7 @@ void newton_Otim(long double *a, long double *b, long double *c,
         LIKWID_MARKER_STOP("Resolucao_SL_Otim");
 
         for (int i = 0; i < n; i++) x[i] += s[i];
-
+        
         for (int i = 0; i < n; i++) {
             printf("x%d = %.6Lf \n", i+1, x[i]);
         }

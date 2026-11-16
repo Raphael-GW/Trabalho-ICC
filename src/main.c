@@ -11,14 +11,10 @@ int main(int argc, char* argv[]) {
     int n, max_iter; // define  o tamanho do sistema e o número máximo de iterações
     double x0, tol; // define o chute inicial e a tolerância para convergência
 
-		if (argc < 2) {
-			perror("Sem flag \n");
-			return 1 ;
-		}
-		if (strcmp(argv[1], "-o") != 0 && strcmp(argv[1], "-n") != 0) {
-			perror("Flag errada \n");
-			return 1 ;
-		}
+	if (argc > 1 && strcmp(argv[1], "-o") != 0 && strcmp(argv[1], "-n") != 0) {
+		perror("Flag errada \n");
+		return 1 ;
+	}
 
     printf ("Digite a dimensao do sistema (N): ");
     scanf ("%d", &n);
@@ -48,10 +44,10 @@ int main(int argc, char* argv[]) {
     
 
     /* chute inicial para todos */
-		for (int i = 0; i < n; i++) x[i] = x0;
+	for (int i = 0; i < n; i++) x[i] = x0;
 		
-		LIKWID_MARKER_INIT; // Inicializa o sistema de marcação do LIKWID
-
+	LIKWID_MARKER_INIT; // Inicializa o sistema de marcação do LIKWID
+	if (argc > 1){
 		if ( strcmp(argv[1], "-n") == 0) {
 			
 			avaliaF(x, f, n); //monta o vetor F(X)
@@ -63,7 +59,7 @@ int main(int argc, char* argv[]) {
 			newton(j, f, s, x, tol, max_iter, n, &tempo_montaJ, &tempo_resolucao);
 			tempo_newton = timestamp() - tempo_newton;
 			LIKWID_MARKER_STOP("Newton");
-    
+
 			printf ("##########\n");
 			printf ("# Tempo Total: %f\n", tempo_newton);
 			printf ("# Tempo Jacobiana: %f\n", tempo_montaJ);
@@ -71,9 +67,9 @@ int main(int argc, char* argv[]) {
 			printf ("##########\n");
 		
 		}
-			printf ("##########\n");
-    
-		if ( strcmp(argv[1], "-o") == 0) {
+		printf ("##########\n");
+
+		if (strcmp(argv[1], "-o") == 0) {
 
 			// Roda Agora com as Otimizacoes
 			rtime_t tempo_montaJ_ot = 0.0, tempo_resolucao_ot = 0.0;
@@ -94,6 +90,27 @@ int main(int argc, char* argv[]) {
 			printf ("##########\n");
 			
 		}
+	}
+	// executa o otimizado se nao tem argumentos
+	else{
+		// Roda Agora com as Otimizacoes
+			rtime_t tempo_montaJ_ot = 0.0, tempo_resolucao_ot = 0.0;
+			
+			avaliaF_Otim (x, f, n); //monta o vetor F(X)
+
+			LIKWID_MARKER_START("Newton_Otim");
+			rtime_t tempo_newton_ot = timestamp();
+			newton_Otim (a, b, c, f, s, x, tol, max_iter, n, &tempo_montaJ_ot, &tempo_resolucao_ot);
+			tempo_newton_ot = timestamp() - tempo_newton_ot;
+			LIKWID_MARKER_STOP("Newton_Otim");
+
+
+			printf ("##########\n");
+			printf ("# Tempo Otimizado Total: %f\n", tempo_newton_ot);
+			printf ("# Tempo Otimizado Jacobiana: %f\n", tempo_montaJ_ot);
+			printf ("# Tempo Otimizado SL: %f\n", tempo_resolucao_ot);
+			printf ("##########\n");
+	}
 
     free(x); 
     free(f); 
