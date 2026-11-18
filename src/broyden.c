@@ -212,6 +212,7 @@ void newton(long double **j, long double *f, long double *s, long double *x, lon
     long double nF = norma(f, n);
 
     if (nF < tol) {
+
       printf("%2d | %.6e |  (convergiu)\n", k, nF);
       printf("\nConvergencia em %d iteracoes.\n", k);
       break;
@@ -226,11 +227,14 @@ void newton(long double **j, long double *f, long double *s, long double *x, lon
 	
 
     for (int i = 0; i < n; i++) x[i] += s[i]; // atualiza X(i+1)
+	  
+    #ifdef DEBUG 
 
     for (int i = 0; i < n; i++) {
       printf ("x%d = %.6Lf \n", i+1, x[i]);
     }
     printf("#\n");
+    #endif
 
     nF = norma(s, n);
 
@@ -308,10 +312,12 @@ void newton_Otim(long double *a, long double *b, long double *c,
 
         for (int i = 0; i < n; i++) x[i] += s[i];
         
+				#ifdef DEBUG 
         for (int i = 0; i < n; i++) {
             printf("x%d = %.6Lf \n", i+1, x[i]);
         }
         printf("#\n");
+				#endif
 
         nF = norma_Otim (s, n);
         if (nF < tol) { 

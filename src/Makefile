@@ -3,6 +3,7 @@ LIKWID_PREFIX ?= /home/soft/likwid
 
 LIKWID_INC = -I$(LIKWID_PREFIX)/include
 LIKWID_LIB = -L$(LIKWID_PREFIX)/lib -llikwid -lm
+DFLAGS = -DDEBUG
 
 # Flags de Compilação
 # -g para o Valgrind e -DLIKWID_PERFMON para ativar as marcações do likwid.h
@@ -25,10 +26,13 @@ main.o: main.c
 	gcc -c main.c $(CFLAGS)
 
 broyden.o: broyden.h broyden.c
-	gcc -c broyden.c $(CFLAGS)
+	gcc -c broyden.c $(CFLAGS) 
 
 utils.o: utils.h utils.c
 	gcc -c utils.c $(CFLAGS)
+
+debug: main.o broyden.o utils.o
+	gcc -o $(nomePrograma) main.o broyden.o utils.o $(LIKWID_LIB) $(LDFLAGS) $(DFLAGS)
 
 valgrind: $(nomePrograma)
 	valgrind $(FLAGS_VALGRIND) ./$(nomePrograma)
@@ -38,4 +42,4 @@ clean:
 
 purge:
 	rm -f *.o *.gch $(nomePrograma)
-	rm saida_*
+	rm -r resultados

@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
 			tempo_newton = timestamp() - tempo_newton;
 			LIKWID_MARKER_STOP("Newton");
 
-			printf ("##########\n");
+			printf ("\n##########\n");
 			printf ("# Tempo Total: %f\n", tempo_newton);
 			printf ("# Tempo Jacobiana: %f\n", tempo_montaJ);
 			printf ("# Tempo SL: %f\n", tempo_resolucao);
