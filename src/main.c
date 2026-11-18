@@ -65,9 +65,7 @@ int main(int argc, char* argv[]) {
     		free(j);
 		
 		}
-		printf ("##########\n");
-
-		if (strcmp(argv[1], "-o") == 0) {
+		else {
 
 			//Jacobiana otimizada
 			long double *a =  malloc(n * sizeof(long double)); // subdiagonal
@@ -92,15 +90,19 @@ int main(int argc, char* argv[]) {
 			printf ("# Tempo Otimizado SL: %f\n", tempo_resolucao_ot);
 			printf ("##########\n");
 
-			    free(a);
-				free(b);
-				free(c);
+			free(a);
+			free(b);
+			free(c);
 			
 		}
 	}
 	// executa o otimizado se nao tem argumentos
 	else{
 		// Roda Agora com as Otimizacoes
+	        	long double *a =  malloc(n * sizeof(long double)); // subdiagonal
+			long double *b =  malloc(n * sizeof(long double)); // diagonal principal
+			long double *c =  malloc(n * sizeof(long double)); // superdiagonal
+
 			rtime_t tempo_montaJ_ot = 0.0, tempo_resolucao_ot = 0.0;
 			
 			avaliaF_Otim (x, f, n); //monta o vetor F(X)
