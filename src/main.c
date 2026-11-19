@@ -25,9 +25,9 @@ int main(int argc, char* argv[]) {
     printf ("Digite o numero maximo de iteracoes: ");
     scanf ("%d", &max_iter);
 
-    long double *x =  malloc(n * sizeof(long double)); // vetor com as variáveis x
-    long double *f =  malloc(n * sizeof(long double)); // vetor com cada resultado de f(x)
-    long double *s =  malloc(n * sizeof(long double)); // delta usado para atualizar x (i+1)
+    double *x =  malloc(n * sizeof(double)); // vetor com as variáveis x
+    double *f =  malloc(n * sizeof(double)); // vetor com cada resultado de f(x)
+    double *s =  malloc(n * sizeof(double)); // delta usado para atualizar x (i+1)
     
 
     /* chute inicial para todos */
@@ -37,10 +37,10 @@ int main(int argc, char* argv[]) {
 	if (argc > 1){
 		if ( strcmp(argv[1], "-n") == 0) {
 
-			long double **j =  malloc(n * sizeof(long double*)); // matriz jacobiana
+			double **j =  malloc(n * sizeof(double*)); // matriz jacobiana
 
 			for (int i = 0; i < n; i++){
-				j[i] = malloc(n * sizeof(long double));
+				j[i] = malloc(n * sizeof(double));
 			}
 			
 			avaliaF(x, f, n); //monta o vetor F(X)
@@ -68,9 +68,9 @@ int main(int argc, char* argv[]) {
 		else {
 
 			//Jacobiana otimizada
-			long double *a =  malloc(n * sizeof(long double)); // subdiagonal
-			long double *b =  malloc(n * sizeof(long double)); // diagonal principal
-			long double *c =  malloc(n * sizeof(long double)); // superdiagonal
+			double *a =  malloc(n * sizeof(double)); // subdiagonal
+			double *b =  malloc(n * sizeof(double)); // diagonal principal
+			double *c =  malloc(n * sizeof(double)); // superdiagonal
 
 			// Roda Agora com as Otimizacoes
 			rtime_t tempo_montaJ_ot = 0.0, tempo_resolucao_ot = 0.0;
@@ -99,9 +99,9 @@ int main(int argc, char* argv[]) {
 	// executa o otimizado se nao tem argumentos
 	else{
 		// Roda Agora com as Otimizacoes
-	        	long double *a =  malloc(n * sizeof(long double)); // subdiagonal
-			long double *b =  malloc(n * sizeof(long double)); // diagonal principal
-			long double *c =  malloc(n * sizeof(long double)); // superdiagonal
+	        	double *a =  malloc(n * sizeof(double)); // subdiagonal
+			double *b =  malloc(n * sizeof(double)); // diagonal principal
+			double *c =  malloc(n * sizeof(double)); // superdiagonal
 
 			rtime_t tempo_montaJ_ot = 0.0, tempo_resolucao_ot = 0.0;
 			
